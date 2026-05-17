@@ -29,4 +29,12 @@ enum FolioHaptic {
     static func pageClose() {
         UIImpactFeedbackGenerator(style: .medium).impactOccurred()
     }
+
+    /// Heavier impact for "tossing an element off the page" — feels
+    /// distinct from the soft placement/commit haptic so the user can
+    /// tell the difference between a release-to-commit and a
+    /// release-to-delete.
+    static func delete() {
+        UIImpactFeedbackGenerator(style: .heavy).impactOccurred()
+    }
 }

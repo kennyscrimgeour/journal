@@ -26,10 +26,26 @@ struct PageView: View {
     /// (the nav toolbar, inline with the back button).
     var hidesDate: Bool = false
 
+    @Environment(\.modelContext) private var modelContext
     @State private var keyboardHeight: CGFloat = 0
+    /// Live centre of the dragging element, or nil when no drag is in
+    /// flight. Drives the trash icon's reveal: it fades in only when
+    /// the element nears the bottom delete strip.
+    @State private var dragCentre: CGPoint? = nil
 
     private static let topContentInset: CGFloat = 40
     private static let focusedElementBreath: CGFloat = 100
+    /// Height of the bottom strip that counts as the delete zone.
+    /// Drops here delete; drops elsewhere commit (and clamp).
+    private static let bottomDeleteZone: CGFloat = 80
+    /// Trash icon fades in when the dragging element's centre is within
+    /// this distance of the bottom edge. Larger than bottomDeleteZone
+    /// so the affordance appears before the user enters the zone.
+    private static let trashRevealZone: CGFloat = 200
+    /// Trash icon centres this many points above the bottom of the
+    /// canvas — close to the edge so it visually anchors the delete
+    /// strip rather than floating away from it.
+    private static let trashBottomInset: CGFloat = 32
 
     var body: some View {
         GeometryReader { geometry in
@@ -66,9 +82,33 @@ struct PageView: View {
                     TextElementView(
                         element: element,
                         focusedElementID: $focusedElementID,
-                        isPageClosed: isPageClosed
+                        isPageClosed: isPageClosed,
+                        canvasSize: geometry.size,
+                        bottomDeleteZone: Self.bottomDeleteZone,
+                        onDragChange: { centre in
+                            withAnimation(.easeOut(duration: 0.22)) {
+                                dragCentre = centre
+                            }
+                        },
+                        onDelete: { deleteElement(element) }
                     )
                     .offset(x: element.positionX, y: element.positionY)
+                    .transition(.opacity.combined(with: .scale(scale: 0.6)))
+                }
+
+                // Floating trash affordance. Reveals only when the
+                // dragging element's centre approaches the bottom edge.
+                // .allowsHitTesting(false) so the active drag gesture
+                // keeps tracking the finger as it passes over the icon.
+                if isTrashRevealed(for: geometry.size) {
+                    Image(systemName: "trash")
+                        .font(.system(size: 18))
+                        .foregroundStyle(Color.folioInk)
+                        .frame(width: 48, height: 48)
+                        .background(Circle().fill(Color.folioInk.opacity(0.10)))
+                        .position(trashCentre(for: geometry.size))
+                        .allowsHitTesting(false)
+                        .transition(.opacity.combined(with: .scale(scale: 0.7)))
                 }
             }
             .frame(width: geometry.size.width, height: geometry.size.height, alignment: .topLeading)
@@ -108,6 +148,27 @@ struct PageView: View {
         let targetVisibleBottom = element.positionY + Self.focusedElementBreath
         let overhang = targetVisibleBottom - visibleHeight
         return overhang > 0 ? -overhang : 0
+    }
+
+    /// Animated removal of a text element. ForEach picks up the
+    /// relationship change and runs the .transition modifier on the
+    /// child, giving the element a fade + shrink as it disappears.
+    private func deleteElement(_ element: TextElement) {
+        withAnimation(.easeOut(duration: 0.22)) {
+            modelContext.delete(element)
+        }
+    }
+
+    /// Where the trash icon sits, in canvas coords.
+    private func trashCentre(for canvas: CGSize) -> CGPoint {
+        CGPoint(x: canvas.width / 2, y: canvas.height - Self.trashBottomInset)
+    }
+
+    /// True when the live drag centre is within trashRevealZone of the
+    /// bottom edge. The icon fades in/out via .transition on its `if`.
+    private func isTrashRevealed(for canvas: CGSize) -> Bool {
+        guard let centre = dragCentre else { return false }
+        return centre.y > canvas.height - Self.trashRevealZone
     }
 
     /// Honours the chosen tap-while-editing rule (commit, do not create

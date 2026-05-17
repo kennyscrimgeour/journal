@@ -17,6 +17,22 @@ struct TextElementView: View {
     /// Suppresses drag and tap-to-refocus, but leaves the currently
     /// focused TextField interactive — see design.md §3.1.
     let isPageClosed: Bool
+    /// Bounds of the page canvas. Used to clamp commit positions so
+    /// off-edge drops don't fly off-screen, and to detect drops into
+    /// the bottom delete strip.
+    let canvasSize: CGSize
+    /// Height in points of the bottom strip that counts as the delete
+    /// zone. PageView positions the trash icon within this strip and
+    /// fades it in as the user approaches.
+    let bottomDeleteZone: CGFloat
+    /// Called with the live projected element-centre during a drag,
+    /// and with nil when the drag ends. PageView uses this both to
+    /// decide whether to surface the trash icon and to know "some
+    /// element is currently being dragged."
+    let onDragChange: (CGPoint?) -> Void
+    /// Called when the drag releases inside the bottom delete strip.
+    /// PageView owns modelContext.delete so this view doesn't need it.
+    let onDelete: () -> Void
 
     /// Visual offset accumulated during an in-progress drag. Committed back
     /// into element.positionX / positionY on drag end and reset to .zero.
@@ -24,6 +40,33 @@ struct TextElementView: View {
     @State private var isDragging: Bool = false
 
     private var isFocused: Bool { focusedElementID == element.id }
+
+    /// Rough element-centre offsets from the stored top-leading position.
+    /// We don't measure the real height (would need GeometryReader inside
+    /// the element), so we use sensible defaults; refine if elements get
+    /// much bigger than a couple of lines.
+    private static let estimatedHalfWidth: CGFloat = 120  // half of maxWidth 240
+    private static let estimatedHalfHeight: CGFloat = 15
+
+    /// True when the projected centre of the element (during an in-progress
+    /// drag) sits inside the bottom delete strip. Drives both the opacity
+    /// fade (live feedback) and the release-to-delete decision.
+    private var isInDeleteZone: Bool {
+        guard isDragging else { return false }
+        return isInBottomDeleteZone(translation: dragOffset)
+    }
+
+    private func projectedCentre(translation: CGSize) -> CGPoint {
+        CGPoint(
+            x: element.positionX + translation.width + Self.estimatedHalfWidth,
+            y: element.positionY + translation.height + Self.estimatedHalfHeight
+        )
+    }
+
+    private func isInBottomDeleteZone(translation: CGSize) -> Bool {
+        let c = projectedCentre(translation: translation)
+        return c.y > canvasSize.height - bottomDeleteZone
+    }
 
     var body: some View {
         TextField("", text: $element.text, axis: .vertical)
@@ -47,6 +90,7 @@ struct TextElementView: View {
                 x: 0,
                 y: isDragging ? 4 : 0
             )
+            .opacity(isInDeleteZone ? 0.4 : 1.0)
             .offset(dragOffset)
     }
 
@@ -87,17 +131,29 @@ struct TextElementView: View {
                 }
                 // No withAnimation here — offset must track the finger 1:1.
                 dragOffset = value.translation
+                onDragChange(projectedCentre(translation: value.translation))
             }
             .onEnded { value in
-                // Persist the new position and zero the transient in the
-                // same (non-animated) transaction so the visual stays put.
-                element.positionX += value.translation.width
-                element.positionY += value.translation.height
+                if isInBottomDeleteZone(translation: value.translation) {
+                    FolioHaptic.delete()
+                    onDelete()
+                    onDragChange(nil)
+                    return
+                }
+
+                // Commit position, clamping the centre to canvas bounds so
+                // off-left/right/top drops don't fly fully off-screen.
+                let raw = projectedCentre(translation: value.translation)
+                let cx = max(0, min(canvasSize.width, raw.x))
+                let cy = max(0, min(canvasSize.height, raw.y))
+                element.positionX = cx - Self.estimatedHalfWidth
+                element.positionY = cy - Self.estimatedHalfHeight
                 dragOffset = .zero
                 withAnimation(.spring(duration: 0.3, bounce: 0)) {
                     isDragging = false
                 }
                 FolioHaptic.soft()
+                onDragChange(nil)
             }
     }
 }
