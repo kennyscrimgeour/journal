@@ -1,0 +1,31 @@
+# macOS
+.DS_Store
+
+# Xcode user state (per-user, not shared)
+xcuserdata/
+*.xcuserstate
+*.xcuserdatad/
+
+# Xcode build artefacts
+build/
+DerivedData/
+*.hmap
+*.ipa
+*.dSYM
+*.dSYM.zip
+*.moved-aside
+*.xccheckout
+*.xcscmblueprint
+
+# Swift Package Manager
+.swiftpm/
+.build/
+Package.resolved
+
+# Claude Code session state
+.claude/
+
+# Finder duplicate artefacts
+*\ 2.md
+*\ 2/
+.git\ 2/
