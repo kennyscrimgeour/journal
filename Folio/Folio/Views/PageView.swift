@@ -21,6 +21,10 @@ struct PageView: View {
     /// no icon is rendered — used by JournalPageView, which displays a
     /// closed page from inside the journal itself.
     var onShowJournal: (() -> Void)? = nil
+    /// When true, the page's date header is not rendered inside the
+    /// canvas — the caller (e.g. JournalPageView) places it elsewhere
+    /// (the nav toolbar, inline with the back button).
+    var hidesDate: Bool = false
 
     @State private var keyboardHeight: CGFloat = 0
 
@@ -32,11 +36,13 @@ struct PageView: View {
             ZStack(alignment: .topLeading) {
                 Color.folioPaper
 
-                Text(page.date, format: .dateTime.weekday(.wide).day().month(.wide).year())
-                    .font(.system(.subheadline, design: .serif))
-                    .foregroundStyle(Color.folioInk)
-                    .frame(maxWidth: .infinity, alignment: .center)
-                    .padding(.top, 8)
+                if !hidesDate {
+                    Text(page.date, format: .dateTime.weekday(.wide).day().month(.wide).year())
+                        .font(.system(.subheadline, design: .serif))
+                        .foregroundStyle(Color.folioInk)
+                        .frame(maxWidth: .infinity, alignment: .center)
+                        .padding(.top, 10)
+                }
 
                 if let onShowJournal {
                     Button {

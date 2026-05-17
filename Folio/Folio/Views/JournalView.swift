@@ -33,7 +33,15 @@ struct JournalView: View {
                         } label: {
                             JournalThumbnail(page: page)
                         }
-                        .matchedTransitionSource(id: page.id, in: thumbnailNamespace)
+                        .matchedTransitionSource(id: page.id, in: thumbnailNamespace) { config in
+                            // Suppress the default placeholder background
+                            // and match the thumbnail's rounded clip so the
+                            // zoom-back doesn't leave a hard rectangle
+                            // outline behind the returning card.
+                            config
+                                .background(.clear)
+                                .clipShape(RoundedRectangle(cornerRadius: 3))
+                        }
                         .buttonStyle(.plain)
                     }
                 }
@@ -42,6 +50,8 @@ struct JournalView: View {
             }
             .background(Color.folioJournalBackground.ignoresSafeArea())
             .navigationBarTitleDisplayMode(.inline)
+            .toolbarBackground(Color.folioJournalBackground, for: .navigationBar)
+            .toolbarBackground(.visible, for: .navigationBar)
             .toolbar {
                 ToolbarItem(placement: .principal) {
                     Text("Journal")
@@ -55,28 +65,5 @@ struct JournalView: View {
                 }
             }
         }
-    }
-}
-
-/// The placeholder thumbnail for slice 5a — a date-on-cream card.
-/// Slice 5b replaces the body with a real ImageRenderer-based render
-/// of the page's contents.
-private struct JournalThumbnail: View {
-    let page: Page
-
-    var body: some View {
-        VStack(spacing: 0) {
-            Spacer()
-            Text(page.date, format: .dateTime.weekday(.abbreviated).day().month(.abbreviated))
-                .font(.system(.caption, design: .serif))
-                .foregroundStyle(Color.folioInk)
-                .multilineTextAlignment(.center)
-            Spacer()
-        }
-        .frame(maxWidth: .infinity)
-        .aspectRatio(0.55, contentMode: .fit)
-        .background(Color.folioPaper)
-        .clipShape(RoundedRectangle(cornerRadius: 4))
-        .shadow(color: .black.opacity(0.08), radius: 4, x: 0, y: 2)
     }
 }
