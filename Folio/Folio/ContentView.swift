@@ -1,50 +1,33 @@
 import SwiftUI
 import SwiftData
 
-/// Top-level container. Owns the focus state for the editor (so the
-/// rollover orchestrator has direct access to it) and runs the midnight
-/// rollover routine — quietly closing yesterday's page and creating
-/// today's, deferred while the user is mid-edit per design.md §3.1.
+/// Top-level container. Hosts a NavigationStack whose root is the journal
+/// grid; the active editor and read-only page views are pushed destinations
+/// keyed by Page.id. On launch we push today's id so the user lands on
+/// today's editor; popping (book icon or left-edge swipe) reveals the grid.
+///
+/// All page-to-page transitions go through the iOS 18 navigation zoom
+/// (.matchedTransitionSource on the source tile, .navigationTransition(.zoom)
+/// on the destination), anchored on each tile's grid position.
 struct ContentView: View {
     @Environment(\.modelContext) private var modelContext
     @Environment(\.scenePhase) private var scenePhase
     @Query(sort: \Page.date, order: .reverse) private var allPages: [Page]
     @FocusState private var focusedElementID: UUID?
-    @State private var showJournal: Bool = false
+    @State private var path: [UUID] = []
+    @Namespace private var pageNamespace
 
     var body: some View {
-        ZStack {
-            Group {
-                if let page = activePage {
-                    PageView(
-                        page: page,
-                        isPageClosed: isActivePageBeforeToday,
-                        focusedElementID: $focusedElementID,
-                        onShowJournal: { showJournal = true }
-                    )
-                    // .id(page.id) tells SwiftUI to treat each page as a
-                    // distinct view, so swapping pages triggers the
-                    // .transition modifier below (rather than just an
-                    // in-place re-render). Combined with .animation on the
-                    // Group, this gives us the midnight cross-fade.
-                    .id(page.id)
-                    .transition(.opacity.combined(with: .scale(scale: 0.96)))
-                } else {
-                    Color.folioPaper.ignoresSafeArea()
+        NavigationStack(path: $path) {
+            JournalView(pageNamespace: pageNamespace)
+                .navigationDestination(for: UUID.self) { pageID in
+                    pageDestination(for: pageID)
                 }
-            }
-            .animation(.easeInOut(duration: 0.6), value: activePage?.id)
-
-            if showJournal {
-                JournalView(onClose: { showJournal = false })
-                    .transition(.move(edge: .top))
-                    .zIndex(1)
-            }
         }
-        .animation(.easeInOut(duration: 0.4), value: showJournal)
         .task {
             ensurePageExists()
             attemptRollover()
+            pushActivePageOnLaunch()
         }
         .onReceive(NotificationCenter.default.publisher(for: .NSCalendarDayChanged)) { _ in
             attemptRollover()
@@ -60,7 +43,9 @@ struct ContentView: View {
         }
         #if DEBUG
         .overlay(alignment: .topTrailing) {
-            if !showJournal {
+            // Only show on the editor, not on the journal grid — the
+            // grid's toolbar already occupies the top-trailing area.
+            if !path.isEmpty {
                 Button {
                     simulateMidnight()
                 } label: {
@@ -77,28 +62,55 @@ struct ContentView: View {
         #endif
     }
 
+    /// Resolves a navigation destination for a page id. Today's page
+    /// (closedAt == nil) renders the editable PageView and hides the
+    /// system navigation bar — the in-page book icon and the left-edge
+    /// swipe are the back affordances. Past pages render the read-only
+    /// JournalPageView, which provides its own custom nav chrome.
+    @ViewBuilder
+    private func pageDestination(for pageID: UUID) -> some View {
+        if let page = allPages.first(where: { $0.id == pageID }) {
+            if page.closedAt == nil {
+                PageView(
+                    page: page,
+                    isPageClosed: false,
+                    focusedElementID: $focusedElementID,
+                    onShowJournal: { popToJournal() }
+                )
+                .navigationTransition(.zoom(sourceID: pageID, in: pageNamespace))
+                .toolbar(.hidden, for: .navigationBar)
+            } else {
+                JournalPageView(page: page)
+                    .navigationTransition(.zoom(sourceID: pageID, in: pageNamespace))
+            }
+        }
+    }
+
     /// The page the user is currently interacting with — the latest one
-    /// that hasn't been closed yet. Its date may be today, or yesterday
-    /// during the brief window between midnight and quiet-completion.
+    /// that hasn't been closed yet.
     private var activePage: Page? {
         allPages.first { $0.closedAt == nil }
     }
 
-    /// True when the active page belongs to a calendar day before today.
-    /// Used to gate creation, drag, and tap-to-refocus while still
-    /// allowing the currently-focused TextField to finish input.
-    private var isActivePageBeforeToday: Bool {
-        guard let page = activePage else { return false }
-        return page.date < Calendar.current.startOfDay(for: .now)
-    }
-
-    /// First-run-of-the-day bootstrap. If no open page exists at all,
-    /// create today's. Distinct from rollover, which also closes stale
-    /// pages — this is for the very first launch when allPages is empty.
     private func ensurePageExists() {
         guard activePage == nil else { return }
         let new = Page(date: Calendar.current.startOfDay(for: .now))
         modelContext.insert(new)
+    }
+
+    /// On first appearance, push today's editor onto the navigation path
+    /// so the user lands on it. We fetch directly via the modelContext
+    /// (rather than reading allPages) because @Query may not have picked
+    /// up a just-inserted page yet within this same .task.
+    private func pushActivePageOnLaunch() {
+        guard path.isEmpty else { return }
+        let descriptor = FetchDescriptor<Page>(
+            predicate: #Predicate<Page> { $0.closedAt == nil },
+            sortBy: [SortDescriptor(\.date, order: .reverse)]
+        )
+        if let active = try? modelContext.fetch(descriptor).first {
+            path.append(active.id)
+        }
     }
 
     /// Quietly closes any open page whose date is before today, and
@@ -108,7 +120,7 @@ struct ContentView: View {
         guard focusedElementID == nil else { return }
 
         let today = Calendar.current.startOfDay(for: .now)
-        var didClose = false
+        var justClosedIDs: [UUID] = []
 
         for page in allPages where page.closedAt == nil && page.date < today {
             // closedAt is the moment the page should have closed, not the
@@ -116,7 +128,7 @@ struct ContentView: View {
             // away for several days.
             let dayAfter = Calendar.current.date(byAdding: .day, value: 1, to: page.date) ?? today
             page.closedAt = dayAfter
-            didClose = true
+            justClosedIDs.append(page.id)
         }
 
         let hasToday = allPages.contains { Calendar.current.isDate($0.date, equalTo: today, toGranularity: .day) }
@@ -125,8 +137,32 @@ struct ContentView: View {
             modelContext.insert(new)
         }
 
-        if didClose {
+        if !justClosedIDs.isEmpty {
             FolioHaptic.pageClose()
+            advancePathIfClosed(justClosedIDs: justClosedIDs)
+        }
+    }
+
+    /// If the user was on a page that just closed (typical: yesterday's
+    /// editor at midnight), replace the path's top with today's new page
+    /// so they're carried forward rather than left looking at a now-closed
+    /// page in the editor.
+    private func advancePathIfClosed(justClosedIDs: [UUID]) {
+        guard let top = path.last, justClosedIDs.contains(top) else { return }
+        let descriptor = FetchDescriptor<Page>(
+            predicate: #Predicate<Page> { $0.closedAt == nil },
+            sortBy: [SortDescriptor(\.date, order: .reverse)]
+        )
+        if let newActive = try? modelContext.fetch(descriptor).first {
+            path = [newActive.id]
+        }
+    }
+
+    /// Pop the editor and reveal the journal grid. Called by PageView's
+    /// book icon — equivalent to the user swiping from the left edge.
+    private func popToJournal() {
+        if !path.isEmpty {
+            path.removeLast()
         }
     }
 

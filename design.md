@@ -47,8 +47,8 @@ The §3.2 prohibition on notifications-that-pressure applies here: a "continue e
 
 ### 3.2 No accumulation
 
-- The journal of past pages exists, but the app's default state is today's page.
-- Past pages are not surfaced unless the user explicitly seeks them out.
+- Your journal of pages exists, but the app's default state is today's page.
+- Past pages are not surfaced unless the user explicitly seeks them out — the journal is reached by a back gesture (or the small book icon), not pushed.
 - There are no badges, streaks, "you've journaled X days in a row" mechanics.
 - Missed days are blank pages in the journal. They are not flagged, surfaced, or apologised for.
 - There are no notifications that pressure the user to engage. A single optional gentle reminder per day is the maximum.
@@ -167,15 +167,17 @@ Folio supports five types of element. Each has its own visual treatment, but all
 
 **Naming note (2026-05-17).** Originally specified as "archive" throughout this document; renamed to "journal" to better match how users naturally describe what Folio holds ("I keep a journal in Folio"). The §8.1 visual treatment — cooler tones, deliberately quieter — is unchanged, so the warmer name doesn't dilute §7's design intent: a place you visit on purpose, not a place that calls to you.
 
+**Architectural note (2026-05-17).** Today's page also appears in the journal grid, as the top tile. Visually identical to past tiles. This makes the journal the hub of the app and the active editor "one push away" — navigating back from today (via the book icon or a left-edge swipe) lands on the grid, where today's tile sits at the top. Tapping today's tile returns to the editor. The app still opens directly on today's editor; the grid only becomes visible when the user navigates back to it. This unifies all page-to-page transitions under the iOS 18 navigation zoom and gives the left-edge back swipe for free.
+
 ### 7.1 Access
 
-- The journal is accessed via a single subtle gesture — a downward swipe from the top of the active page, or a small icon near the date.
-- The journal view is visually distinct from the active page: cooler tone, less inviting, deliberately quieter. It is a place you visit on purpose, not a place that calls to you.
+- The journal is reached by navigating back from the active page — either a left-edge swipe (the standard NavigationStack back gesture) or a small book icon near the date.
+- The journal view is visually distinct from the active page: a slightly darker cream (per §8.1), deliberately quieter. It is a place you visit on purpose, not a place that calls to you.
 
 ### 7.2 Browsing
 
-- Past pages are displayed as a grid of thumbnails by default, scrollable backwards through time.
-- Tapping a thumbnail opens the full page in read-only view.
+- All of your pages are displayed as a grid of thumbnails — today's tile at the top, then backwards through time. Today's tile is visually identical to past tiles.
+- Tapping today's tile opens the editor; tapping a past tile opens a read-only view. Both transitions zoom from the tile to fill the screen.
 - A "random page" option exists for serendipitous revisiting, but is not the default.
 
 ### 7.3 What the journal does not do
