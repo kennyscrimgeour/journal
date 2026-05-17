@@ -34,6 +34,17 @@ These are the non-negotiable rules. Every feature, every screen, every animation
 - Time zone changes are handled by the user's current local time at the moment the rule is evaluated. If the user crosses a time zone, their page may close earlier or later than expected. This is acceptable. Folio does not anchor to a fixed time zone.
 - There is no grace period beyond what is naturally afforded by the user finishing an in-progress interaction (e.g. a voice memo being recorded at 23:59:55 finishes recording and is added to the page). No new elements can be initiated after midnight.
 
+**Clarification (2026-05-17).** In-progress interactions at midnight complete naturally — this applies to text edits as well as voice memos. Concretely:
+
+- The page closes the moment the user stops touching it: focus drops, recording ends, drag releases.
+- New elements cannot be initiated after midnight. Tap-to-create on the canvas is silently ignored. Drag-to-move on existing elements is suppressed.
+- Tapping a non-focused element to start editing it is also blocked after midnight — it's a new edit, even if not a new element.
+- The currently-focused element continues to accept input until the user commits (taps outside). The TextField is not disabled mid-keystroke.
+- No notification, no banner, no modal asks the user what to do. Silence is the feature: the page transitions when the user finishes, not when the clock demands it.
+- If the user stays focused indefinitely past midnight, the page stays open indefinitely. This is self-imposed; Folio does not beg for engagement.
+
+The §3.2 prohibition on notifications-that-pressure applies here: a "continue editing or move on?" prompt at midnight would itself be such a notification, and would also make the page closing a *user choice* — which would let backlog re-enter the product through the back door (§2). Quiet completion preserves both: the user finishes naturally, and the page closes irrevocably the moment they let go.
+
 ### 3.2 No accumulation
 
 - The archive of past pages exists, but the app's default state is today's page.

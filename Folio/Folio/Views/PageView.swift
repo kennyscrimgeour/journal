@@ -1,10 +1,9 @@
 import SwiftUI
 import SwiftData
 
-/// The spatial canvas for one Page. Owns the cream paper, the date header,
-/// the layout of all text elements at their (positionX, positionY), the
-/// tap-to-create gesture, and the focus state that tracks which element
-/// is currently being edited.
+/// The spatial canvas for one Page. Layout + manipulation only — focus
+/// state lives in ContentView (so the rollover orchestrator has direct
+/// access), and the commit-on-focus-drop logic lives there too.
 ///
 /// Keyboard avoidance is handled manually: SwiftUI's automatic avoidance
 /// under-shifts when content is absolutely positioned with `.offset`, so
@@ -12,19 +11,16 @@ import SwiftData
 /// enough to keep the focused element above the keyboard.
 struct PageView: View {
     let page: Page
+    /// True when the page belongs to a day before today. Suppresses
+    /// new-element creation, drag, and tap-to-refocus — see design.md
+    /// §3.1 quiet completion clarification. The currently-focused
+    /// element can still finish input.
+    let isPageClosed: Bool
+    @FocusState.Binding var focusedElementID: UUID?
 
-    @Environment(\.modelContext) private var modelContext
-    @FocusState private var focusedElementID: UUID?
     @State private var keyboardHeight: CGFloat = 0
 
-    /// Vertical space at the top of the page reserved for the date header.
-    /// Taps above this line never create a new element (but still commit
-    /// an in-progress edit). Adjust if the date typography changes.
     private static let topContentInset: CGFloat = 40
-
-    /// Visible space we try to keep below a focused element before the
-    /// keyboard edge — gives the cursor a little breathing room rather
-    /// than parking the element flush against the keyboard.
     private static let focusedElementBreath: CGFloat = 100
 
     var body: some View {
@@ -39,8 +35,12 @@ struct PageView: View {
                     .padding(.top, 8)
 
                 ForEach(page.textElements) { element in
-                    TextElementView(element: element, focusedElementID: $focusedElementID)
-                        .offset(x: element.positionX, y: element.positionY)
+                    TextElementView(
+                        element: element,
+                        focusedElementID: $focusedElementID,
+                        isPageClosed: isPageClosed
+                    )
+                    .offset(x: element.positionX, y: element.positionY)
                 }
             }
             .frame(width: geometry.size.width, height: geometry.size.height, alignment: .topLeading)
@@ -65,9 +65,6 @@ struct PageView: View {
         }
         .animation(.easeOut(duration: 0.25), value: keyboardHeight)
         .animation(.easeOut(duration: 0.25), value: focusedElementID)
-        .onChange(of: focusedElementID) { oldValue, _ in
-            commitElement(withID: oldValue)
-        }
     }
 
     /// How many points to lift the canvas so the focused element stays
@@ -86,15 +83,20 @@ struct PageView: View {
     }
 
     /// Honours the chosen tap-while-editing rule (commit, do not create
-    /// a new element on this tap). Only an empty-page tap with no element
-    /// currently focused creates a new element.
+    /// a new element on this tap). Creation is also suppressed entirely
+    /// once midnight has passed on a still-open page (design.md §3.1).
     private func handleCanvasTap(at location: CGPoint) {
-        // Any canvas tap commits an in-progress edit, regardless of where
-        // on the page it lands.
+        // Any canvas tap commits an in-progress edit, regardless of
+        // where on the page it lands. This is the path by which a
+        // post-midnight quiet completion happens — user taps outside,
+        // focus drops, ContentView commits and runs the rollover.
         if focusedElementID != nil {
             focusedElementID = nil
             return
         }
+
+        // No new elements after midnight, even on a still-open page.
+        guard !isPageClosed else { return }
 
         // Creation is gated by the top boundary — the date header sits
         // there and should not be writable over.
@@ -103,20 +105,6 @@ struct PageView: View {
         let new = TextElement(positionX: location.x, positionY: location.y)
         page.textElements.append(new)
         focusedElementID = new.id
-        FolioHaptic.soft()
-    }
-
-    /// When focus leaves an element we either keep it (text is non-empty)
-    /// or delete it (text is empty or whitespace-only). Either way, fire a
-    /// soft haptic so the commit is felt.
-    private func commitElement(withID id: UUID?) {
-        guard let id else { return }
-        guard let element = page.textElements.first(where: { $0.id == id }) else { return }
-
-        let trimmed = element.text.trimmingCharacters(in: .whitespacesAndNewlines)
-        if trimmed.isEmpty {
-            modelContext.delete(element)
-        }
         FolioHaptic.soft()
     }
 }

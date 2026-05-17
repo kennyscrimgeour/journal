@@ -13,8 +13,14 @@ extension Color {
 /// rather than chasing UIImpactFeedbackGenerator usages across the codebase.
 /// Per design.md §6.3, haptics are part of the product from day one.
 enum FolioHaptic {
-    /// Soft tap. Used when placing or committing a text element.
+    /// Soft tap. Placing, committing, lifting, settling.
     static func soft() {
         UIImpactFeedbackGenerator(style: .soft).impactOccurred()
+    }
+
+    /// "Gentle, dignified pulse" for the page closing at midnight,
+    /// per design.md §6.3.
+    static func pageClose() {
+        UIImpactFeedbackGenerator(style: .medium).impactOccurred()
     }
 }

@@ -8,10 +8,15 @@ import SwiftData
 ///
 ///   - focused:   TextField catches taps (cursor, selection), no drag.
 ///   - unfocused: TextField ignores hits; a transparent overlay catches
-///                tap-to-refocus and drag-to-move.
+///                tap-to-refocus and drag-to-move — both suppressed
+///                when the page is read-only (post-midnight).
 struct TextElementView: View {
     @Bindable var element: TextElement
     @FocusState.Binding var focusedElementID: UUID?
+    /// True after midnight on a page that hasn't yet quiet-completed.
+    /// Suppresses drag and tap-to-refocus, but leaves the currently
+    /// focused TextField interactive — see design.md §3.1.
+    let isPageClosed: Bool
 
     /// Visual offset accumulated during an in-progress drag. Committed back
     /// into element.positionX / positionY on drag end and reset to .zero.
@@ -32,12 +37,7 @@ struct TextElementView: View {
             .allowsHitTesting(isFocused)
             .overlay {
                 if !isFocused {
-                    Color.clear
-                        .contentShape(Rectangle())
-                        .onTapGesture {
-                            focusedElementID = element.id
-                        }
-                        .gesture(dragGesture)
+                    unfocusedOverlay
                 }
             }
             .scaleEffect(isDragging ? 1.04 : 1.0)
@@ -48,6 +48,25 @@ struct TextElementView: View {
                 y: isDragging ? 4 : 0
             )
             .offset(dragOffset)
+    }
+
+    /// The transparent gesture-catcher that sits on top of the TextField
+    /// when it's not focused. On a closed page the overlay still exists
+    /// (so taps don't accidentally fall through to canvas-tap creation)
+    /// but carries no gestures — existing text is read-only.
+    @ViewBuilder
+    private var unfocusedOverlay: some View {
+        let base = Color.clear.contentShape(Rectangle())
+
+        if isPageClosed {
+            base
+        } else {
+            base
+                .onTapGesture {
+                    focusedElementID = element.id
+                }
+                .gesture(dragGesture)
+        }
     }
 
     private var dragGesture: some Gesture {
