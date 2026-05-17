@@ -17,6 +17,10 @@ struct PageView: View {
     /// element can still finish input.
     let isPageClosed: Bool
     @FocusState.Binding var focusedElementID: UUID?
+    /// Callback invoked when the user taps the journal icon. nil means
+    /// no icon is rendered — used by JournalPageView, which displays a
+    /// closed page from inside the journal itself.
+    var onShowJournal: (() -> Void)? = nil
 
     @State private var keyboardHeight: CGFloat = 0
 
@@ -33,6 +37,24 @@ struct PageView: View {
                     .foregroundStyle(Color.folioInk)
                     .frame(maxWidth: .infinity, alignment: .center)
                     .padding(.top, 8)
+
+                if let onShowJournal {
+                    Button {
+                        // Commit any focused element first; ContentView's
+                        // .onChange handler picks up the focus drop and
+                        // runs the commit + rollover routine.
+                        focusedElementID = nil
+                        onShowJournal()
+                    } label: {
+                        Image(systemName: "book.closed")
+                            .font(.system(size: 14))
+                            .foregroundStyle(Color.folioInk)
+                            .frame(width: 32, height: 32)
+                            .contentShape(Rectangle())
+                    }
+                    .padding(.top, 4)
+                    .padding(.leading, 4)
+                }
 
                 ForEach(page.textElements) { element in
                     TextElementView(

@@ -14,7 +14,7 @@ Folio is not a journal, not a notes app, not a memory keeper. It is a structured
 
 ## 2. Why Folio exists
 
-Most journaling and capture apps fail the same way: they accumulate. Half-finished entries, photos you meant to caption, voice memos you forgot to listen back to, days you missed — the archive grows into debt, and eventually opening the app reminds you of what you owe it. People stop opening it.
+Most journaling and capture apps fail the same way: they accumulate. Half-finished entries, photos you meant to caption, voice memos you forgot to listen back to, days you missed — the journal grows into debt, and eventually opening the app reminds you of what you owe it. People stop opening it.
 
 Folio inverts this. The page closes whether you fill it or not. There is no backlog because there is no possibility of backlog. The product cannot make you feel guilty because it does not let you owe it anything.
 
@@ -47,10 +47,10 @@ The §3.2 prohibition on notifications-that-pressure applies here: a "continue e
 
 ### 3.2 No accumulation
 
-- The archive of past pages exists, but the app's default state is today's page.
+- The journal of past pages exists, but the app's default state is today's page.
 - Past pages are not surfaced unless the user explicitly seeks them out.
 - There are no badges, streaks, "you've journaled X days in a row" mechanics.
-- Missed days are blank pages in the archive. They are not flagged, surfaced, or apologised for.
+- Missed days are blank pages in the journal. They are not flagged, surfaced, or apologised for.
 - There are no notifications that pressure the user to engage. A single optional gentle reminder per day is the maximum.
 
 ### 3.3 No accounts, no walls
@@ -86,7 +86,7 @@ The §3.2 prohibition on notifications-that-pressure applies here: a "continue e
 
 - **05:00 - 23:59 (active state):** The user can add, arrange, edit, and remove elements freely. Elements are auto-saved continuously.
 - **00:00 (transition):** A brief, dignified animation closes the page. The user sees the page settle, the date adjust, and a new blank page take its place. If the user has the app open at midnight, they witness this transition. If not, they simply find a fresh page next time they open the app.
-- **After close (read-only):** The closed page lives in the archive. It can be viewed but not modified.
+- **After close (read-only):** The closed page lives in the journal. It can be viewed but not modified.
 
 ### 4.3 The first launch
 
@@ -163,12 +163,14 @@ Folio supports five types of element. Each has its own visual treatment, but all
 
 ---
 
-## 7. The archive
+## 7. The journal
+
+**Naming note (2026-05-17).** Originally specified as "archive" throughout this document; renamed to "journal" to better match how users naturally describe what Folio holds ("I keep a journal in Folio"). The §8.1 visual treatment — cooler tones, deliberately quieter — is unchanged, so the warmer name doesn't dilute §7's design intent: a place you visit on purpose, not a place that calls to you.
 
 ### 7.1 Access
 
-- The archive is accessed via a single subtle gesture — a downward swipe from the top of the active page, or a small icon near the date.
-- The archive view is visually distinct from the active page: cooler tone, less inviting, deliberately quieter. It is a place you visit on purpose, not a place that calls to you.
+- The journal is accessed via a single subtle gesture — a downward swipe from the top of the active page, or a small icon near the date.
+- The journal view is visually distinct from the active page: cooler tone, less inviting, deliberately quieter. It is a place you visit on purpose, not a place that calls to you.
 
 ### 7.2 Browsing
 
@@ -176,14 +178,14 @@ Folio supports five types of element. Each has its own visual treatment, but all
 - Tapping a thumbnail opens the full page in read-only view.
 - A "random page" option exists for serendipitous revisiting, but is not the default.
 
-### 7.3 What the archive does not do
+### 7.3 What the journal does not do
 
-- The archive does not offer search.
-- The archive does not offer tags or categorisation.
-- The archive does not generate "memories" or "throwbacks" or "On this day."
-- The archive does not export to other formats. (May reconsider in v2.)
+- The journal does not offer search.
+- The journal does not offer tags or categorisation.
+- The journal does not generate "memories" or "throwbacks" or "On this day."
+- The journal does not export to other formats. (May reconsider in v2.)
 
-The reason for each of these absences: search and categorisation imply the archive is a knowledge base. It is not. It is a quiet record. Browsing is the only intended interaction, and serendipity is preferable to retrieval.
+The reason for each of these absences: search and categorisation imply the journal is a knowledge base. It is not. It is a quiet record. Browsing is the only intended interaction, and serendipity is preferable to retrieval.
 
 ---
 
@@ -195,7 +197,7 @@ The reason for each of these absences: search and categorisation imply the archi
 - **Ink (text default):** Deep near-black, never pure #000. Slightly warm to match paper.
 - **Sticker borders:** Pure white with a soft, low-spread drop shadow.
 - **Accents:** A small, curated palette of muted, slightly desaturated colours — a dusty rose, a deep sage, a soft ochre, a muted slate. No bright primaries. No neon. No gradients.
-- **Archive view:** Cooler tones, deliberately less inviting. Suggests glass cases in a quiet room rather than the active workspace.
+- **Journal view:** A slightly darker cream than the active page — same warm family, just dimmer. Revised 2026-05-17 from the originally-specified cooler tones; the warmer-darker version keeps the journal feeling like the same paper world in lower light, rather than a clinically different room.
 
 ### 8.2 Typography
 
@@ -216,7 +218,7 @@ The reason for each of these absences: search and categorisation imply the archi
 ### 9.1 Stack
 
 - **Language:** Swift
-- **UI:** SwiftUI, targeting iOS 17.0 minimum (required for `VNGenerateForegroundInstanceMaskRequest`)
+- **UI:** SwiftUI, targeting iOS 18.0 minimum. (Originally 17.0, the floor for `VNGenerateForegroundInstanceMaskRequest`; bumped 2026-05-17 to use `.navigationTransition(.zoom(...))` and the iOS 18 transition APIs for §7's journal navigation.)
 - **Persistence:** SwiftData primarily; fall back to Core Data only if SwiftData hits known blockers
 - **Sync:** iCloud via CloudKit (handled transparently through SwiftData where possible)
 - **Audio:** AVFoundation for recording, AVAudioEngine for waveform generation
@@ -284,7 +286,7 @@ StampElement: Element
 ## 10. Monetisation
 
 - **One-time purchase** at launch. Indicative price: £4.99-£9.99, to be tested.
-- No subscriptions in v1. May introduce a Pro tier in v1.1+ for premium features (custom stamps, additional fonts, advanced archive features), but the core product remains a one-time purchase forever.
+- No subscriptions in v1. May introduce a Pro tier in v1.1+ for premium features (custom stamps, additional fonts, advanced journal features), but the core product remains a one-time purchase forever.
 - No in-app advertising, ever.
 - No "lite version" with restricted features. Folio is sold whole.
 
@@ -312,8 +314,8 @@ If a feature being considered fits one of the categories above, it does not belo
 - Active page with full element creation: text, voice, photo (with optional subject masking), location, stamps from a curated library
 - Full manipulation: place, move, rotate, resize, layer, delete
 - Midnight rollover with proper transition
-- Archive view (grid of thumbnails, read-only full-page view, random page option)
-- iCloud sync (opt-in during first archive view)
+- Journal view (grid of thumbnails, read-only full-page view, random page option)
+- iCloud sync (opt-in during first journal view)
 - Five fonts (three for user content, two for system use)
 - Curated stamp library (~30 stamps)
 - One-time purchase

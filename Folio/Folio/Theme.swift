@@ -7,6 +7,12 @@ extension Color {
 
     /// Deep warm near-black. Never pure #000. Per design.md §8.1.
     static let folioInk = Color(red: 0.18, green: 0.16, blue: 0.14)
+
+    /// A slightly darker cream than folioPaper. Per design.md §8.1
+    /// (revised 2026-05-17): same warm family as the active page,
+    /// just dimmer — the journal feels like the same world in lower
+    /// light rather than a different room.
+    static let folioJournalBackground = Color(red: 0.95, green: 0.93, blue: 0.88)
 }
 
 /// Centralised haptic taps so we can tune intensities and styles in one place

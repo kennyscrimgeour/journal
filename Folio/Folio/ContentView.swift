@@ -10,27 +10,38 @@ struct ContentView: View {
     @Environment(\.scenePhase) private var scenePhase
     @Query(sort: \Page.date, order: .reverse) private var allPages: [Page]
     @FocusState private var focusedElementID: UUID?
+    @State private var showJournal: Bool = false
 
     var body: some View {
-        Group {
-            if let page = activePage {
-                PageView(
-                    page: page,
-                    isPageClosed: isActivePageBeforeToday,
-                    focusedElementID: $focusedElementID
-                )
-                // .id(page.id) tells SwiftUI to treat each page as a
-                // distinct view, so swapping pages triggers the
-                // .transition modifier below (rather than just an
-                // in-place re-render). Combined with .animation on the
-                // Group, this gives us the midnight cross-fade.
-                .id(page.id)
-                .transition(.opacity.combined(with: .scale(scale: 0.96)))
-            } else {
-                Color.folioPaper.ignoresSafeArea()
+        ZStack {
+            Group {
+                if let page = activePage {
+                    PageView(
+                        page: page,
+                        isPageClosed: isActivePageBeforeToday,
+                        focusedElementID: $focusedElementID,
+                        onShowJournal: { showJournal = true }
+                    )
+                    // .id(page.id) tells SwiftUI to treat each page as a
+                    // distinct view, so swapping pages triggers the
+                    // .transition modifier below (rather than just an
+                    // in-place re-render). Combined with .animation on the
+                    // Group, this gives us the midnight cross-fade.
+                    .id(page.id)
+                    .transition(.opacity.combined(with: .scale(scale: 0.96)))
+                } else {
+                    Color.folioPaper.ignoresSafeArea()
+                }
+            }
+            .animation(.easeInOut(duration: 0.6), value: activePage?.id)
+
+            if showJournal {
+                JournalView(onClose: { showJournal = false })
+                    .transition(.move(edge: .top))
+                    .zIndex(1)
             }
         }
-        .animation(.easeInOut(duration: 0.6), value: activePage?.id)
+        .animation(.easeInOut(duration: 0.4), value: showJournal)
         .task {
             ensurePageExists()
             attemptRollover()
@@ -49,17 +60,19 @@ struct ContentView: View {
         }
         #if DEBUG
         .overlay(alignment: .topTrailing) {
-            Button {
-                simulateMidnight()
-            } label: {
-                Text("→ tomorrow")
-                    .font(.system(.caption2, design: .monospaced))
-                    .foregroundStyle(.white)
-                    .padding(.horizontal, 10)
-                    .padding(.vertical, 5)
-                    .background(Color.folioInk, in: Capsule())
+            if !showJournal {
+                Button {
+                    simulateMidnight()
+                } label: {
+                    Text("→ tomorrow")
+                        .font(.system(.caption2, design: .monospaced))
+                        .foregroundStyle(.white)
+                        .padding(.horizontal, 10)
+                        .padding(.vertical, 5)
+                        .background(Color.folioInk, in: Capsule())
+                }
+                .padding(8)
             }
-            .padding(8)
         }
         #endif
     }
