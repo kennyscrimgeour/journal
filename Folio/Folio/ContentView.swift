@@ -19,10 +19,18 @@ struct ContentView: View {
                     isPageClosed: isActivePageBeforeToday,
                     focusedElementID: $focusedElementID
                 )
+                // .id(page.id) tells SwiftUI to treat each page as a
+                // distinct view, so swapping pages triggers the
+                // .transition modifier below (rather than just an
+                // in-place re-render). Combined with .animation on the
+                // Group, this gives us the midnight cross-fade.
+                .id(page.id)
+                .transition(.opacity.combined(with: .scale(scale: 0.96)))
             } else {
                 Color.folioPaper.ignoresSafeArea()
             }
         }
+        .animation(.easeInOut(duration: 0.6), value: activePage?.id)
         .task {
             ensurePageExists()
             attemptRollover()
