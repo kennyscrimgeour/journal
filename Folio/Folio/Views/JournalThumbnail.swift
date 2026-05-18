@@ -71,6 +71,7 @@ private struct PageThumbnailContent: View {
                     .multilineTextAlignment(.leading)
                     .frame(maxWidth: 240, alignment: .topLeading)
                     .fixedSize(horizontal: false, vertical: true)
+                    .rotationEffect(.radians(element.rotationRadians))
                     .offset(x: element.positionX, y: element.positionY)
             }
         }

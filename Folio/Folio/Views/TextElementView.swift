@@ -38,6 +38,19 @@ struct TextElementView: View {
     /// into element.positionX / positionY on drag end and reset to .zero.
     @State private var dragOffset: CGSize = .zero
     @State private var isDragging: Bool = false
+    /// element.fontSize captured at the start of a pinch gesture, so we
+    /// can derive the running fontSize from the gesture's cumulative
+    /// magnification. nil when no pinch is in progress.
+    @State private var pinchStartFontSize: Double? = nil
+    /// element.rotationRadians captured at the start of a rotate gesture.
+    /// nil when no rotate is in progress.
+    @State private var rotateStartRotation: Double? = nil
+
+    /// Min / max font size for the pinch gesture. design.md §5.1
+    /// doesn't specify exact bounds; these are reasonable for an iPhone
+    /// canvas. Tune if elements feel too small or too dominant.
+    private static let fontSizeMin: Double = 12
+    private static let fontSizeMax: Double = 96
 
     private var isFocused: Bool { focusedElementID == element.id }
 
@@ -77,6 +90,7 @@ struct TextElementView: View {
             .focused($focusedElementID, equals: element.id)
             .frame(maxWidth: 240, alignment: .topLeading)
             .fixedSize(horizontal: false, vertical: true)
+            .rotationEffect(.radians(element.rotationRadians))
             .allowsHitTesting(isFocused)
             .overlay {
                 if !isFocused {
@@ -98,9 +112,20 @@ struct TextElementView: View {
     /// when it's not focused. On a closed page the overlay still exists
     /// (so taps don't accidentally fall through to canvas-tap creation)
     /// but carries no gestures — existing text is read-only.
+    ///
+    /// .frame(minWidth/minHeight) expands the hit area for two-finger
+    /// pinch/rotate. Held to a middle ground — bigger and adjacent
+    /// elements' hit zones overlap, which causes two fingers on two
+    /// different elements to fire two single-finger drags instead of
+    /// one pinch. The proper fix is a selection state (pinch fires on
+    /// the selected element regardless of finger position); until then,
+    /// this size compromises: pinch on very short isolated words can
+    /// still be awkward.
     @ViewBuilder
     private var unfocusedOverlay: some View {
-        let base = Color.clear.contentShape(Rectangle())
+        let base = Color.clear
+            .frame(minWidth: 300, minHeight: 140)
+            .contentShape(Rectangle())
 
         if isPageClosed {
             base
@@ -109,8 +134,53 @@ struct TextElementView: View {
                 .onTapGesture {
                     focusedElementID = element.id
                 }
-                .gesture(dragGesture)
+                .gesture(combinedManipulationGesture)
         }
+    }
+
+    /// Drag, pinch, and rotate composed simultaneously. Pinch + rotate
+    /// listed first so they get first crack at recognising — otherwise
+    /// the single-finger drag (minimumDistance 16) can grab a partial
+    /// two-finger pinch-in before MagnifyGesture has decided.
+    private var combinedManipulationGesture: some Gesture {
+        pinchGesture
+            .simultaneously(with: rotateGesture)
+            .simultaneously(with: dragGesture)
+    }
+
+    private var pinchGesture: some Gesture {
+        MagnifyGesture()
+            .onChanged { value in
+                if pinchStartFontSize == nil {
+                    pinchStartFontSize = element.fontSize
+                    FolioHaptic.soft()
+                }
+                if let start = pinchStartFontSize {
+                    let target = start * value.magnification
+                    element.fontSize = max(Self.fontSizeMin, min(Self.fontSizeMax, target))
+                }
+            }
+            .onEnded { _ in
+                pinchStartFontSize = nil
+                FolioHaptic.soft()
+            }
+    }
+
+    private var rotateGesture: some Gesture {
+        RotateGesture()
+            .onChanged { value in
+                if rotateStartRotation == nil {
+                    rotateStartRotation = element.rotationRadians
+                    FolioHaptic.soft()
+                }
+                if let start = rotateStartRotation {
+                    element.rotationRadians = start + value.rotation.radians
+                }
+            }
+            .onEnded { _ in
+                rotateStartRotation = nil
+                FolioHaptic.soft()
+            }
     }
 
     private var dragGesture: some Gesture {
@@ -119,7 +189,7 @@ struct TextElementView: View {
         // its .local coordinate space moves with the element. Translations
         // reported in that moving space create a feedback loop with the
         // offset. .global pins translations to screen coordinates.
-        DragGesture(minimumDistance: 8, coordinateSpace: .global)
+        DragGesture(minimumDistance: 16, coordinateSpace: .global)
             .onChanged { value in
                 if !isDragging {
                     // Wrap ONLY the isDragging flip so the spring applies

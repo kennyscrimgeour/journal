@@ -25,7 +25,7 @@ struct ContentView: View {
                 }
         }
         .task {
-            ensurePageExists()
+            cleanupDuplicateTodayPages()
             attemptRollover()
             pushActivePageOnLaunch()
         }
@@ -92,10 +92,28 @@ struct ContentView: View {
         allPages.first { $0.closedAt == nil }
     }
 
-    private func ensurePageExists() {
-        guard activePage == nil else { return }
-        let new = Page(date: Calendar.current.startOfDay(for: .now))
-        modelContext.insert(new)
+    /// Heals an old race that could leave more than one unclosed page
+    /// dated today in the store. Keeps the one with the most elements
+    /// (almost always the one the user actually edited) and deletes the
+    /// rest. SwiftData cascades the delete through .textElements.
+    ///
+    /// The race itself is now prevented in attemptRollover() via
+    /// modelContext.fetchCount (which sees just-inserted pages within
+    /// the same .task, unlike the reactive @Query allPages), so this
+    /// cleanup is here for stores that built up duplicates under the
+    /// old code path.
+    private func cleanupDuplicateTodayPages() {
+        let today = Calendar.current.startOfDay(for: .now)
+        let descriptor = FetchDescriptor<Page>(
+            predicate: #Predicate<Page> { $0.closedAt == nil && $0.date == today }
+        )
+        let todays = (try? modelContext.fetch(descriptor)) ?? []
+        guard todays.count > 1 else { return }
+
+        let sorted = todays.sorted { $0.textElements.count > $1.textElements.count }
+        for duplicate in sorted.dropFirst() {
+            modelContext.delete(duplicate)
+        }
     }
 
     /// On first appearance, push today's editor onto the navigation path
@@ -131,8 +149,14 @@ struct ContentView: View {
             justClosedIDs.append(page.id)
         }
 
-        let hasToday = allPages.contains { Calendar.current.isDate($0.date, equalTo: today, toGranularity: .day) }
-        if !hasToday {
+        // Use fetchCount, not allPages.contains(...), because @Query may
+        // not yet reflect a page that was inserted earlier in the same
+        // .task (the bug that previously produced duplicate today pages).
+        let todayDescriptor = FetchDescriptor<Page>(
+            predicate: #Predicate<Page> { $0.date == today }
+        )
+        let existingTodayCount = (try? modelContext.fetchCount(todayDescriptor)) ?? 0
+        if existingTodayCount == 0 {
             let new = Page(date: today)
             modelContext.insert(new)
         }
