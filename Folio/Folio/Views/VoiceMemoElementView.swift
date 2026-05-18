@@ -1,11 +1,11 @@
 import SwiftUI
 import SwiftData
 
-/// Slice 8 placeholder for a voice memo sticker. Renders a small
-/// rectangle with a waveform glyph and the recording's duration, with
-/// drag + drag-to-delete reusing the pattern from TextElementView.
-/// Slice 9 replaces this body with a proper polaroid sticker that
-/// renders the actual audio waveform.
+/// Voice memo sticker — a rounded-pill capsule containing a rendered
+/// waveform and the recording's duration, per the design.md §5.2
+/// pill-form revision. Drag + drag-to-bottom-delete reuse the pattern
+/// from TextElementView. Playback (tap to play / pause) lands in
+/// slice 10.
 struct VoiceMemoElementView: View {
     @Bindable var element: VoiceMemoElement
     let isPageClosed: Bool
@@ -17,11 +17,13 @@ struct VoiceMemoElementView: View {
     @State private var dragOffset: CGSize = .zero
     @State private var isDragging: Bool = false
 
-    /// Rough half-extents for the placeholder sticker. Used for the
-    /// projected-centre math (delete-zone check, clamping). Slice 9
-    /// will measure the real sticker dimensions properly.
-    private static let estimatedHalfWidth: CGFloat = 90
-    private static let estimatedHalfHeight: CGFloat = 28
+    /// Sticker dimensions used for both layout and the projected-centre
+    /// maths (delete zone, drop-position clamping). Keep these in sync
+    /// with the .frame on the pill body below.
+    private static let stickerWidth: CGFloat = 180
+    private static let stickerHeight: CGFloat = 40
+    private static let estimatedHalfWidth: CGFloat = stickerWidth / 2
+    private static let estimatedHalfHeight: CGFloat = stickerHeight / 2
 
     private var isInDeleteZone: Bool {
         guard isDragging else { return false }
@@ -41,24 +43,70 @@ struct VoiceMemoElementView: View {
     }
 
     var body: some View {
+        pillSticker
+            .rotationEffect(.radians(element.rotationRadians))
+            .scaleEffect(isDragging ? 1.04 : 1.0)
+            .opacity(isInDeleteZone ? 0.4 : 1.0)
+            .offset(dragOffset)
+            .gesture(dragGesture, isEnabled: !isPageClosed)
+    }
+
+    /// The rounded-pill sticker: cream capsule, soft drop shadow, no
+    /// border. Waveform fills most of the width; duration sits at the
+    /// trailing edge in small serif. Per design.md §5.2.
+    private var pillSticker: some View {
         HStack(spacing: 8) {
-            Image(systemName: "waveform")
-                .font(.system(size: 18))
-                .foregroundStyle(Color.folioInk)
+            waveformCanvas
             Text(formattedDuration)
-                .font(.system(.caption, design: .serif))
-                .foregroundStyle(Color.folioInk)
+                .font(.system(.caption2, design: .serif))
+                .foregroundStyle(Color.folioInk.opacity(0.55))
         }
-        .padding(.horizontal, 14)
-        .padding(.vertical, 10)
-        .background(Color.folioPaper)
-        .overlay(Rectangle().stroke(Color.white, lineWidth: 6))
-        .shadow(color: .black.opacity(0.10), radius: 3, x: 0, y: 1)
-        .rotationEffect(.radians(element.rotationRadians))
-        .scaleEffect(isDragging ? 1.04 : 1.0)
-        .opacity(isInDeleteZone ? 0.4 : 1.0)
-        .offset(dragOffset)
-        .gesture(dragGesture, isEnabled: !isPageClosed)
+        .padding(.horizontal, 12)
+        .padding(.vertical, 8)
+        .frame(width: Self.stickerWidth, height: Self.stickerHeight)
+        .background(Capsule().fill(Color.folioPaper))
+        .shadow(color: .black.opacity(0.12), radius: 3, x: 0, y: 2)
+    }
+
+    /// Canvas-drawn waveform: one bar per amplitude sample, heights
+    /// proportional to amplitude, centred vertically. For voice memos
+    /// recorded before slice 9 (empty waveformSamples) renders a row
+    /// of subtle dots so the sticker isn't blank.
+    private var waveformCanvas: some View {
+        Canvas { context, size in
+            let samples = element.waveformSamples
+            guard !samples.isEmpty else {
+                drawDottedPlaceholder(context: context, size: size)
+                return
+            }
+
+            let spacing: CGFloat = 1
+            let count = samples.count
+            let barWidth = max(1, (size.width - CGFloat(count - 1) * spacing) / CGFloat(count))
+            let colour = Color.folioInk.opacity(0.75)
+
+            for (i, sample) in samples.enumerated() {
+                let height = max(2, size.height * CGFloat(sample))
+                let x = CGFloat(i) * (barWidth + spacing)
+                let y = (size.height - height) / 2
+                let rect = CGRect(x: x, y: y, width: barWidth, height: height)
+                context.fill(Path(rect), with: .color(colour))
+            }
+        }
+    }
+
+    private func drawDottedPlaceholder(context: GraphicsContext, size: CGSize) {
+        let dotCount = 12
+        let dotWidth: CGFloat = 2
+        let spacing: CGFloat = 4
+        let total = CGFloat(dotCount) * dotWidth + CGFloat(dotCount - 1) * spacing
+        let startX = (size.width - total) / 2
+        let colour = Color.folioInk.opacity(0.25)
+        for i in 0..<dotCount {
+            let x = startX + CGFloat(i) * (dotWidth + spacing)
+            let rect = CGRect(x: x, y: size.height / 2 - 1, width: dotWidth, height: 2)
+            context.fill(Path(rect), with: .color(colour))
+        }
     }
 
     private var formattedDuration: String {

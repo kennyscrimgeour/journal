@@ -98,7 +98,7 @@ The §3.2 prohibition on notifications-that-pressure applies here: a "continue e
 
 ## 5. Element types
 
-Folio supports five types of element. Each has its own visual treatment, but all share a common design language: the Polaroid-style white border and slight shadow, suggesting a physical object placed on the page.
+Folio supports five types of element. Each has its own visual treatment. **Most** share a common design language — the Polaroid-style white border and slight shadow, suggesting a physical object placed on the page. Voice memos are the exception (see §5.2): a cream pill capsule with a soft shadow, better suited to a horizontal waveform than a photographic frame.
 
 ### 5.1 Text
 
@@ -112,7 +112,7 @@ Folio supports five types of element. Each has its own visual treatment, but all
 ### 5.2 Voice memo
 
 - Tap-and-hold a button to record. Release to stop.
-- Recording produces a sticker: a Polaroid-bordered rectangle containing a rendered waveform.
+- Recording produces a sticker: a rounded-pill capsule with a soft shadow, containing a rendered waveform. (Revised 2026-05-18 from the original Polaroid-bordered rectangle — the pill suits a horizontal waveform more naturally and reads as an audio object rather than a photo.)
 - The waveform is generated from the actual audio data — abstract, vertical lines whose heights map to amplitude.
 - Tap the sticker to play; tap again to pause. Playback is local; no streaming.
 - Maximum recording length: 60 seconds. Voice memos are *moments*, not interviews.

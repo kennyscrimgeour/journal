@@ -221,8 +221,9 @@ struct PageView: View {
     }
 
     /// The toolbar voice button's press/release lifecycle: start on
-    /// press, stop on release and place the resulting sticker at the
-    /// top-centre of the page (user can drag it where they want).
+    /// press, stop on release, generate the waveform from the saved
+    /// audio, and place the resulting sticker at the top-centre of
+    /// the page (user can drag it where they want).
     private func handleVoiceButton(isPressing: Bool, canvasSize: CGSize) {
         if isPressing {
             Task { @MainActor in
@@ -231,10 +232,12 @@ struct PageView: View {
         } else {
             Task { @MainActor in
                 guard let result = audioRecorder.stopRecording() else { return }
+                let samples = WaveformGenerator.generate(from: result.url)
                 createVoiceMemo(
                     canvasSize: canvasSize,
                     url: result.url,
-                    duration: result.duration
+                    duration: result.duration,
+                    waveformSamples: samples
                 )
             }
         }
@@ -242,14 +245,20 @@ struct PageView: View {
 
     /// Inserts a freshly-recorded voice memo at the top centre of the
     /// canvas (just below the date header), draggable from there.
-    private func createVoiceMemo(canvasSize: CGSize, url: URL, duration: TimeInterval) {
-        let halfWidth: CGFloat = 90  // matches VoiceMemoElementView's estimatedHalfWidth
-        let topY: CGFloat = 60       // below the date header, above the elements
+    private func createVoiceMemo(
+        canvasSize: CGSize,
+        url: URL,
+        duration: TimeInterval,
+        waveformSamples: [Double]
+    ) {
+        let halfWidth: CGFloat = 110  // matches the new polaroid's estimated half-width
+        let topY: CGFloat = 60        // below the date header, above the elements
         let memo = VoiceMemoElement(
             positionX: canvasSize.width / 2 - halfWidth,
             positionY: topY,
             audioFileURL: url,
-            durationSeconds: duration
+            durationSeconds: duration,
+            waveformSamples: waveformSamples
         )
         page.voiceMemoElements.append(memo)
         FolioHaptic.soft()

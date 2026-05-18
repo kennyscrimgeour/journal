@@ -74,6 +74,47 @@ private struct PageThumbnailContent: View {
                     .rotationEffect(.radians(element.rotationRadians))
                     .offset(x: element.positionX, y: element.positionY)
             }
+
+            ForEach(page.voiceMemoElements) { memo in
+                VoiceMemoThumbnail(samples: memo.waveformSamples)
+                    .rotationEffect(.radians(memo.rotationRadians))
+                    .offset(x: memo.positionX, y: memo.positionY)
+            }
+        }
+    }
+}
+
+/// Static miniature pill for use inside ImageRenderer-rendered
+/// thumbnails. Mirrors the editor's pill but skips the caption — the
+/// duration would be unreadable at thumbnail scale.
+private struct VoiceMemoThumbnail: View {
+    let samples: [Double]
+
+    var body: some View {
+        waveform
+            .padding(.horizontal, 12)
+            .padding(.vertical, 8)
+            .frame(width: 180, height: 40)
+            .background(Capsule().fill(Color.folioPaper))
+            .shadow(color: .black.opacity(0.12), radius: 3, x: 0, y: 2)
+    }
+
+    private var waveform: some View {
+        Canvas { context, size in
+            guard !samples.isEmpty else { return }
+            let spacing: CGFloat = 1
+            let count = samples.count
+            let barWidth = max(1, (size.width - CGFloat(count - 1) * spacing) / CGFloat(count))
+            let colour = Color.folioInk.opacity(0.75)
+            for (i, sample) in samples.enumerated() {
+                let height = max(2, size.height * CGFloat(sample))
+                let x = CGFloat(i) * (barWidth + spacing)
+                let y = (size.height - height) / 2
+                context.fill(
+                    Path(CGRect(x: x, y: y, width: barWidth, height: height)),
+                    with: .color(colour)
+                )
+            }
         }
     }
 }
