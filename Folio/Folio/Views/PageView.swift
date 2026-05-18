@@ -32,8 +32,17 @@ struct PageView: View {
     /// flight. Drives the trash icon's reveal: it fades in only when
     /// the element nears the bottom delete strip.
     @State private var dragCentre: CGPoint? = nil
+    /// Owns the AVAudioRecorder lifecycle for this page. Per-PageView
+    /// so multiple pages don't share recorder state; recording is only
+    /// meaningful for today's editor anyway.
+    @State private var audioRecorder = AudioRecorder()
 
     private static let topContentInset: CGFloat = 40
+    /// Reserved bottom strip that mirrors topContentInset. Covers the
+    /// ToolbarView (HStack of five 44pt icons plus 12pt vertical
+    /// padding = 68pt) plus a small margin so taps near the toolbar
+    /// edge don't create text elements behind it.
+    private static let bottomContentInset: CGFloat = 80
     private static let focusedElementBreath: CGFloat = 100
     /// Height of the bottom strip that counts as the delete zone.
     /// Drops here delete; drops elsewhere commit (and clamp).
@@ -90,10 +99,45 @@ struct PageView: View {
                                 dragCentre = centre
                             }
                         },
-                        onDelete: { deleteElement(element) }
+                        onDelete: { deleteTextElement(element) }
                     )
                     .offset(x: element.positionX, y: element.positionY)
                     .transition(.opacity.combined(with: .scale(scale: 0.6)))
+                }
+
+                ForEach(page.voiceMemoElements) { memo in
+                    VoiceMemoElementView(
+                        element: memo,
+                        isPageClosed: isPageClosed,
+                        canvasSize: geometry.size,
+                        bottomDeleteZone: Self.bottomDeleteZone,
+                        onDragChange: { centre in
+                            withAnimation(.easeOut(duration: 0.22)) {
+                                dragCentre = centre
+                            }
+                        },
+                        onDelete: { deleteVoiceMemo(memo) }
+                    )
+                    .offset(x: memo.positionX, y: memo.positionY)
+                    .transition(.opacity.combined(with: .scale(scale: 0.6)))
+                }
+
+                // Bottom toolbar per design.md §6.1. Hidden while an
+                // element is being dragged so the trash icon below has
+                // room.
+                if dragCentre == nil {
+                    VStack {
+                        Spacer()
+                        ToolbarView(
+                            onVoicePressChange: { isPressing in
+                                handleVoiceButton(
+                                    isPressing: isPressing,
+                                    canvasSize: geometry.size
+                                )
+                            },
+                            isRecording: audioRecorder.isRecording
+                        )
+                    }
                 }
 
                 // Floating trash affordance. Reveals only when the
@@ -117,7 +161,7 @@ struct PageView: View {
             .gesture(
                 SpatialTapGesture()
                     .onEnded { event in
-                        handleCanvasTap(at: event.location)
+                        handleCanvasTap(at: event.location, canvasSize: geometry.size)
                     }
             )
         }
@@ -133,6 +177,13 @@ struct PageView: View {
         }
         .animation(.easeOut(duration: 0.25), value: keyboardHeight)
         .animation(.easeOut(duration: 0.25), value: focusedElementID)
+        .onDisappear {
+            // If the user navigates away mid-recording, drop the
+            // partial file rather than orphan it on disk.
+            if audioRecorder.isRecording {
+                audioRecorder.cancelRecording()
+            }
+        }
     }
 
     /// How many points to lift the canvas so the focused element stays
@@ -153,10 +204,55 @@ struct PageView: View {
     /// Animated removal of a text element. ForEach picks up the
     /// relationship change and runs the .transition modifier on the
     /// child, giving the element a fade + shrink as it disappears.
-    private func deleteElement(_ element: TextElement) {
+    private func deleteTextElement(_ element: TextElement) {
         withAnimation(.easeOut(duration: 0.22)) {
             modelContext.delete(element)
         }
+    }
+
+    /// Same animated removal for voice memos. We delete the model row;
+    /// the .m4a file on disk is left in Documents/voicememos/ for now
+    /// (orphans accumulate slowly with no journaling-rate concern). A
+    /// later pass can sweep unreferenced audio files.
+    private func deleteVoiceMemo(_ memo: VoiceMemoElement) {
+        withAnimation(.easeOut(duration: 0.22)) {
+            modelContext.delete(memo)
+        }
+    }
+
+    /// The toolbar voice button's press/release lifecycle: start on
+    /// press, stop on release and place the resulting sticker at the
+    /// top-centre of the page (user can drag it where they want).
+    private func handleVoiceButton(isPressing: Bool, canvasSize: CGSize) {
+        if isPressing {
+            Task { @MainActor in
+                await audioRecorder.startRecording()
+            }
+        } else {
+            Task { @MainActor in
+                guard let result = audioRecorder.stopRecording() else { return }
+                createVoiceMemo(
+                    canvasSize: canvasSize,
+                    url: result.url,
+                    duration: result.duration
+                )
+            }
+        }
+    }
+
+    /// Inserts a freshly-recorded voice memo at the top centre of the
+    /// canvas (just below the date header), draggable from there.
+    private func createVoiceMemo(canvasSize: CGSize, url: URL, duration: TimeInterval) {
+        let halfWidth: CGFloat = 90  // matches VoiceMemoElementView's estimatedHalfWidth
+        let topY: CGFloat = 60       // below the date header, above the elements
+        let memo = VoiceMemoElement(
+            positionX: canvasSize.width / 2 - halfWidth,
+            positionY: topY,
+            audioFileURL: url,
+            durationSeconds: duration
+        )
+        page.voiceMemoElements.append(memo)
+        FolioHaptic.soft()
     }
 
     /// Where the trash icon sits, in canvas coords.
@@ -173,8 +269,9 @@ struct PageView: View {
 
     /// Honours the chosen tap-while-editing rule (commit, do not create
     /// a new element on this tap). Creation is also suppressed entirely
-    /// once midnight has passed on a still-open page (design.md §3.1).
-    private func handleCanvasTap(at location: CGPoint) {
+    /// once midnight has passed on a still-open page (design.md §3.1)
+    /// and inside the top/bottom inset strips (date header and toolbar).
+    private func handleCanvasTap(at location: CGPoint, canvasSize: CGSize) {
         // Any canvas tap commits an in-progress edit, regardless of
         // where on the page it lands. This is the path by which a
         // post-midnight quiet completion happens — user taps outside,
@@ -187,9 +284,10 @@ struct PageView: View {
         // No new elements after midnight, even on a still-open page.
         guard !isPageClosed else { return }
 
-        // Creation is gated by the top boundary — the date header sits
-        // there and should not be writable over.
+        // Creation is gated by the top boundary (date header) and the
+        // bottom boundary (toolbar). Taps in either strip silently no-op.
         guard location.y >= Self.topContentInset else { return }
+        guard location.y <= canvasSize.height - Self.bottomContentInset else { return }
 
         let new = TextElement(positionX: location.x, positionY: location.y)
         page.textElements.append(new)

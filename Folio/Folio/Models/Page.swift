@@ -17,12 +17,16 @@ final class Page {
     @Relationship(deleteRule: .cascade, inverse: \TextElement.page)
     var textElements: [TextElement]
 
+    @Relationship(deleteRule: .cascade, inverse: \VoiceMemoElement.page)
+    var voiceMemoElements: [VoiceMemoElement]
+
     init(date: Date) {
         self.id = UUID()
         self.date = date
         self.createdAt = Date()
         self.closedAt = nil
         self.textElements = []
+        self.voiceMemoElements = []
     }
 
     var isClosed: Bool { closedAt != nil }

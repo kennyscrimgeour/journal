@@ -219,5 +219,5 @@ struct ContentView: View {
 
 #Preview {
     ContentView()
-        .modelContainer(for: [Page.self, TextElement.self], inMemory: true)
+        .modelContainer(for: [Page.self, TextElement.self, VoiceMemoElement.self], inMemory: true)
 }

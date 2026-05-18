@@ -144,9 +144,13 @@ Folio supports five types of element. Each has its own visual treatment, but all
 
 ### 6.1 Adding elements
 
-- Elements are added by tapping toolbar buttons at the bottom of the screen, which then enter a placement mode where the user taps the page to place the element.
+- Most elements are added by tapping toolbar buttons at the bottom of the screen, which then enter a placement mode where the user taps the page to place the element.
 - The toolbar is minimal: text, voice, photo, location, stamp. Five icons, no labels in the default state, labels visible on long-press.
 - When no element is being placed or edited, the toolbar is visually quiet — present but not demanding attention.
+
+**Direct-tap exception for text (2026-05-18).** Text is added by tapping directly on an empty area of the page — the tap creates the element at that point and focuses the text field. The toolbar's text icon remains as a visual companion to the other element types, but text doesn't enter placement mode. Rationale: text is the most frequent action and the original toolbar→placement-mode flow added a tap for nothing. The toolbar still drives voice / photo / location / stamp, which all need a deliberate "I'd like one of these" signal before placement.
+
+**Voice memo exception (2026-05-18).** Voice memo uses tap-and-hold on the toolbar voice button to record, releasing to stop. After release the sticker auto-places at the top of the page and is then draggable. No tap-on-page placement step.
 
 ### 6.2 Manipulating elements
 
