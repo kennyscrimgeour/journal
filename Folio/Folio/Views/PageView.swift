@@ -36,6 +36,11 @@ struct PageView: View {
     /// so multiple pages don't share recorder state; recording is only
     /// meaningful for today's editor anyway.
     @State private var audioRecorder = AudioRecorder()
+    /// Owns the AVAudioPlayer lifecycle. Per-PageView so navigating to
+    /// a different page stops any in-flight playback via .onDisappear.
+    /// Single-player semantics inside the service: starting a new memo
+    /// stops the previous one.
+    @State private var audioPlayer = AudioPlayer()
 
     private static let topContentInset: CGFloat = 40
     /// Reserved bottom strip that mirrors topContentInset. Covers the
@@ -116,7 +121,8 @@ struct PageView: View {
                                 dragCentre = centre
                             }
                         },
-                        onDelete: { deleteVoiceMemo(memo) }
+                        onDelete: { deleteVoiceMemo(memo) },
+                        audioPlayer: audioPlayer
                     )
                     .offset(x: memo.positionX, y: memo.positionY)
                     .transition(.opacity.combined(with: .scale(scale: 0.6)))
@@ -183,6 +189,9 @@ struct PageView: View {
             if audioRecorder.isRecording {
                 audioRecorder.cancelRecording()
             }
+            // And don't leave a memo playing into the void if they
+            // leave the page mid-playback.
+            audioPlayer.stop()
         }
     }
 

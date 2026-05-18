@@ -13,6 +13,9 @@ struct VoiceMemoElementView: View {
     let bottomDeleteZone: CGFloat
     let onDragChange: (CGPoint?) -> Void
     let onDelete: () -> Void
+    /// Owned by the parent PageView so a single player serves every
+    /// memo on the page (and only one plays at a time).
+    let audioPlayer: AudioPlayer
 
     @State private var dragOffset: CGSize = .zero
     @State private var isDragging: Bool = false
@@ -48,6 +51,10 @@ struct VoiceMemoElementView: View {
             .scaleEffect(isDragging ? 1.04 : 1.0)
             .opacity(isInDeleteZone ? 0.4 : 1.0)
             .offset(dragOffset)
+            .contentShape(Capsule())
+            .onTapGesture {
+                audioPlayer.toggle(element)
+            }
             .gesture(dragGesture, isEnabled: !isPageClosed)
     }
 
@@ -69,11 +76,16 @@ struct VoiceMemoElementView: View {
     }
 
     /// Canvas-drawn waveform: one bar per amplitude sample, heights
-    /// proportional to amplitude, centred vertically. For voice memos
-    /// recorded before slice 9 (empty waveformSamples) renders a row
-    /// of subtle dots so the sticker isn't blank.
+    /// proportional to amplitude, centred vertically. During playback
+    /// the bars to the left of the current progress render at higher
+    /// opacity than the unplayed ones — the waveform is the scrubber.
+    /// For voice memos recorded before slice 9 (empty waveformSamples)
+    /// renders a row of subtle dots so the sticker isn't blank.
     private var waveformCanvas: some View {
-        Canvas { context, size in
+        let isPlaying = audioPlayer.isPlaying(element)
+        let progress = isPlaying ? audioPlayer.progress : 0
+
+        return Canvas { context, size in
             let samples = element.waveformSamples
             guard !samples.isEmpty else {
                 drawDottedPlaceholder(context: context, size: size)
@@ -83,13 +95,26 @@ struct VoiceMemoElementView: View {
             let spacing: CGFloat = 1
             let count = samples.count
             let barWidth = max(1, (size.width - CGFloat(count - 1) * spacing) / CGFloat(count))
-            let colour = Color.folioInk.opacity(0.75)
+            let progressX = size.width * CGFloat(progress)
+
+            let playedColour = Color.folioInk.opacity(0.9)
+            let unplayedColour = Color.folioInk.opacity(0.4)
+            let idleColour = Color.folioInk.opacity(0.75)
 
             for (i, sample) in samples.enumerated() {
                 let height = max(2, size.height * CGFloat(sample))
                 let x = CGFloat(i) * (barWidth + spacing)
                 let y = (size.height - height) / 2
                 let rect = CGRect(x: x, y: y, width: barWidth, height: height)
+
+                let colour: Color
+                if isPlaying {
+                    let barCentre = x + barWidth / 2
+                    colour = barCentre < progressX ? playedColour : unplayedColour
+                } else {
+                    colour = idleColour
+                }
+
                 context.fill(Path(rect), with: .color(colour))
             }
         }
