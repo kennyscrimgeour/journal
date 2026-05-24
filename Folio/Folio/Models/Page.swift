@@ -20,6 +20,9 @@ final class Page {
     @Relationship(deleteRule: .cascade, inverse: \VoiceMemoElement.page)
     var voiceMemoElements: [VoiceMemoElement]
 
+    @Relationship(deleteRule: .cascade, inverse: \LocationElement.page)
+    var locationElements: [LocationElement]
+
     init(date: Date) {
         self.id = UUID()
         self.date = date
@@ -27,6 +30,7 @@ final class Page {
         self.closedAt = nil
         self.textElements = []
         self.voiceMemoElements = []
+        self.locationElements = []
     }
 
     var isClosed: Bool { closedAt != nil }

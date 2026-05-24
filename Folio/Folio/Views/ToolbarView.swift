@@ -10,22 +10,38 @@ import SwiftUI
 /// doesn't compete with the page.
 struct ToolbarView: View {
     /// Fires while the voice button is held down. Bool = true on press,
-    /// false on release. Wiring to AudioRecorder comes in slice 8c.
+    /// false on release.
     let onVoicePressChange: (Bool) -> Void
 
     /// Visual feedback for when the voice button is mid-recording.
     let isRecording: Bool
+
+    /// Fires on tap of the location button. Captures the user's current
+    /// location, reverse-geocodes it, and places a location sticker.
+    let onLocationTap: () -> Void
 
     var body: some View {
         HStack(spacing: 28) {
             placeholderIcon("textformat")
             voiceButton
             placeholderIcon("photo")
-            placeholderIcon("location")
+            locationButton
             placeholderIcon("star.square")
         }
         .padding(.vertical, 12)
         .padding(.horizontal, 24)
+    }
+
+    private var locationButton: some View {
+        Button {
+            onLocationTap()
+        } label: {
+            Image(systemName: "location")
+                .font(.system(size: 22))
+                .foregroundStyle(Color.folioInk)
+                .frame(width: 44, height: 44)
+                .contentShape(Rectangle())
+        }
     }
 
     private var voiceButton: some View {

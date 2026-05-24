@@ -80,7 +80,39 @@ private struct PageThumbnailContent: View {
                     .rotationEffect(.radians(memo.rotationRadians))
                     .offset(x: memo.positionX, y: memo.positionY)
             }
+
+            ForEach(page.locationElements) { loc in
+                LocationThumbnail(name: loc.displayName)
+                    .rotationEffect(.radians(loc.rotationRadians))
+                    .offset(x: loc.positionX, y: loc.positionY)
+            }
         }
+    }
+}
+
+/// Miniature location sticker for journal thumbnails. Mirrors the
+/// editor's polaroid but without rounding hover/edit state.
+private struct LocationThumbnail: View {
+    let name: String
+
+    var body: some View {
+        HStack(spacing: 6) {
+            Image(systemName: "mappin")
+                .font(.system(size: 13))
+                .foregroundStyle(Color.folioInk.opacity(0.65))
+            Text(name)
+                .font(.system(.caption, design: .serif))
+                .foregroundStyle(Color.folioInk)
+                .lineLimit(2)
+                .multilineTextAlignment(.leading)
+        }
+        .padding(.horizontal, 12)
+        .padding(.vertical, 8)
+        .frame(maxWidth: 200, alignment: .leading)
+        .fixedSize(horizontal: false, vertical: true)
+        .background(Color.folioPaper)
+        .overlay(Rectangle().stroke(Color.white, lineWidth: 6))
+        .shadow(color: .black.opacity(0.12), radius: 3, x: 0, y: 2)
     }
 }
 

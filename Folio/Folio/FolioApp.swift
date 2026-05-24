@@ -7,6 +7,6 @@ struct FolioApp: App {
         WindowGroup {
             ContentView()
         }
-        .modelContainer(for: [Page.self, TextElement.self, VoiceMemoElement.self])
+        .modelContainer(for: [Page.self, TextElement.self, VoiceMemoElement.self, LocationElement.self])
     }
 }

@@ -41,6 +41,9 @@ struct PageView: View {
     /// Single-player semantics inside the service: starting a new memo
     /// stops the previous one.
     @State private var audioPlayer = AudioPlayer()
+    /// Wraps CLLocationManager + CLGeocoder for one-shot capture.
+    /// Per-PageView so each open page has its own service instance.
+    @State private var locationService = LocationService()
 
     private static let topContentInset: CGFloat = 40
     /// Reserved bottom strip that mirrors topContentInset. Covers the
@@ -128,6 +131,24 @@ struct PageView: View {
                     .transition(.opacity.combined(with: .scale(scale: 0.6)))
                 }
 
+                ForEach(page.locationElements) { loc in
+                    LocationElementView(
+                        element: loc,
+                        isPageClosed: isPageClosed,
+                        canvasSize: geometry.size,
+                        bottomDeleteZone: Self.bottomDeleteZone,
+                        onDragChange: { centre in
+                            withAnimation(.easeOut(duration: 0.22)) {
+                                dragCentre = centre
+                            }
+                        },
+                        onDelete: { deleteLocationElement(loc) },
+                        focusedElementID: $focusedElementID
+                    )
+                    .offset(x: loc.positionX, y: loc.positionY)
+                    .transition(.opacity.combined(with: .scale(scale: 0.6)))
+                }
+
                 // Bottom toolbar per design.md §6.1. Hidden while an
                 // element is being dragged so the trash icon below has
                 // room.
@@ -141,7 +162,10 @@ struct PageView: View {
                                     canvasSize: geometry.size
                                 )
                             },
-                            isRecording: audioRecorder.isRecording
+                            isRecording: audioRecorder.isRecording,
+                            onLocationTap: {
+                                handleLocationTap(canvasSize: geometry.size)
+                            }
                         )
                     }
                 }
@@ -196,16 +220,24 @@ struct PageView: View {
     }
 
     /// How many points to lift the canvas so the focused element stays
-    /// visible above the keyboard. Zero when no keyboard or no focused
+    /// visible above the keyboard. Zero when no keyboard, no focused
     /// element, or when the element is already comfortably visible.
+    /// Works for both text and location elements (both share the
+    /// focusedElementID @FocusState).
     private func canvasLift(viewportHeight: CGFloat) -> CGFloat {
-        guard keyboardHeight > 0,
-              let id = focusedElementID,
-              let element = page.textElements.first(where: { $0.id == id })
-        else { return 0 }
+        guard keyboardHeight > 0, let id = focusedElementID else { return 0 }
+
+        let positionY: Double
+        if let text = page.textElements.first(where: { $0.id == id }) {
+            positionY = text.positionY
+        } else if let loc = page.locationElements.first(where: { $0.id == id }) {
+            positionY = loc.positionY
+        } else {
+            return 0
+        }
 
         let visibleHeight = viewportHeight - keyboardHeight
-        let targetVisibleBottom = element.positionY + Self.focusedElementBreath
+        let targetVisibleBottom = positionY + Self.focusedElementBreath
         let overhang = targetVisibleBottom - visibleHeight
         return overhang > 0 ? -overhang : 0
     }
@@ -227,6 +259,54 @@ struct PageView: View {
         withAnimation(.easeOut(duration: 0.22)) {
             modelContext.delete(memo)
         }
+    }
+
+    /// Animated removal of a location element.
+    private func deleteLocationElement(_ element: LocationElement) {
+        withAnimation(.easeOut(duration: 0.22)) {
+            modelContext.delete(element)
+        }
+    }
+
+    /// Tap-on-location-button handler. Async because the location and
+    /// reverse-geocode are both async. Silent on permission denial or
+    /// other failure for now — slice 11 ships without a UX cue for the
+    /// failure path.
+    private func handleLocationTap(canvasSize: CGSize) {
+        Task { @MainActor in
+            do {
+                let result = try await locationService.captureCurrentPlace()
+                createLocationElement(
+                    canvasSize: canvasSize,
+                    latitude: result.latitude,
+                    longitude: result.longitude,
+                    name: result.displayName
+                )
+            } catch {
+                print("Location capture failed: \(error)")
+            }
+        }
+    }
+
+    /// Inserts a freshly-captured location element at the top centre of
+    /// the canvas, just below the date header. Draggable from there.
+    private func createLocationElement(
+        canvasSize: CGSize,
+        latitude: Double,
+        longitude: Double,
+        name: String
+    ) {
+        let halfWidth: CGFloat = 70
+        let topY: CGFloat = 60
+        let element = LocationElement(
+            positionX: canvasSize.width / 2 - halfWidth,
+            positionY: topY,
+            latitude: latitude,
+            longitude: longitude,
+            displayName: name
+        )
+        page.locationElements.append(element)
+        FolioHaptic.soft()
     }
 
     /// The toolbar voice button's press/release lifecycle: start on

@@ -190,19 +190,27 @@ struct ContentView: View {
         }
     }
 
-    /// Runs whenever focus leaves an element. Trims whitespace; if the
-    /// element is empty, removes it (so blank-commits don't leave ghosts
-    /// on the page). Soft haptic confirms the commit either way.
+    /// Runs whenever focus leaves an element. For text elements: trims
+    /// whitespace and removes the element if empty (no ghost elements).
+    /// For location elements: just the haptic — empty name is a valid
+    /// state (and the user might be in the middle of typing a new name).
+    /// Soft haptic in both cases.
     private func commitFocusedElement(oldID: UUID?) {
-        guard let id = oldID,
-              let page = activePage,
-              let element = page.textElements.first(where: { $0.id == id }) else { return }
+        guard let id = oldID, let page = activePage else { return }
 
-        let trimmed = element.text.trimmingCharacters(in: .whitespacesAndNewlines)
-        if trimmed.isEmpty {
-            modelContext.delete(element)
+        if let text = page.textElements.first(where: { $0.id == id }) {
+            let trimmed = text.text.trimmingCharacters(in: .whitespacesAndNewlines)
+            if trimmed.isEmpty {
+                modelContext.delete(text)
+            }
+            FolioHaptic.soft()
+            return
         }
-        FolioHaptic.soft()
+
+        if page.locationElements.contains(where: { $0.id == id }) {
+            FolioHaptic.soft()
+            return
+        }
     }
 
     #if DEBUG
@@ -219,5 +227,5 @@ struct ContentView: View {
 
 #Preview {
     ContentView()
-        .modelContainer(for: [Page.self, TextElement.self, VoiceMemoElement.self], inMemory: true)
+        .modelContainer(for: [Page.self, TextElement.self, VoiceMemoElement.self, LocationElement.self], inMemory: true)
 }
